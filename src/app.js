@@ -173,7 +173,6 @@ router.post("/notify", async (ctx) => {
 
     // 获取 Socket.IO 名字空间实例
     const namespace = io.of(`/${appId}`);
-    console.log(`namespace`, namespace);
 
     // 向指定用户发送通知
     if (users && Array.isArray(users)) {
@@ -199,7 +198,7 @@ router.post("/notify", async (ctx) => {
     ctx.status = 200;
     ctx.body = { message: "Notification sent successfully" };
   } catch (error) {
-    console.log(`error`, error)
+    logger.error(`error`, error)
     ctx.status = 500;
     ctx.body = { error: "Failed to send notification" };
   }
@@ -213,5 +212,5 @@ app.use(router.routes()).use(router.allowedMethods());
 const PORT = process.env.PORT || 3000;
 
 server.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+  logger.info(`Server is running on port ${PORT}`);
 });
