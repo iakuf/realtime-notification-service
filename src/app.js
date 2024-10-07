@@ -78,6 +78,10 @@ io.of(/\/(.+)/).on("connection", (socket, request) => {
   }
 
   socket.on("subscribe", (eventTopics) => {
+    if (!Array.isArray(eventTopics)) {
+      logger.warn("Invalid event topics format");
+      return;
+    }
     eventTopics.forEach((topic) => {
       socket.join(topic);
 
@@ -137,9 +141,22 @@ io.of(/\/(.+)/).on("connection", (socket, request) => {
 
 // HTTP 接口用于触发实时更新
 // 创建 Koa 路由器
+function cors() {
+    return async (ctx, next) => {
+        ctx.set("Access-Control-Allow-Origin", "*");
+        ctx.set("Access-Control-Allow-Methods", "OPTIONS, GET, POST, PUT, PATCH, DELETE");
+        ctx.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+        if (ctx.request.method === "OPTIONS") {
+            ctx.status = 200;
+            return;
+        }
+        await next();
+    };
+}
 const app = new Koa();
 const router = new Router();
 app.use(bodyParser());
+app.use(cors());
 app.use(router.routes()).use(router.allowedMethods());
 const server = http.createServer(app.callback());
 io.attach(server);
