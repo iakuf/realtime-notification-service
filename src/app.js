@@ -1,6 +1,6 @@
 "use strict";
 import Koa from "koa";
-import bodyParser  from 'koa-bodyparser';
+import bodyParser from "koa-bodyparser";
 import http from "http";
 import https from "https";
 import Router from "koa-router";
@@ -99,7 +99,7 @@ io.of(/\/(.+)/).on("connection", (socket, request) => {
           );
           namespace.in(`${topic}:count`).emit("dataUpdate", {
             type: "count",
-            eventTopics: topic,
+            topic: topic,
             count: topicRoom.size,
           });
         }
@@ -124,11 +124,13 @@ io.of(/\/(.+)/).on("connection", (socket, request) => {
         if (room.includes(":") && !room.includes("count")) {
           var topicRoom = namespace.adapter.rooms.get(room);
           // 发送房间内用户数量更新的通知给所有订阅了room:count的客户端
-          logger.debug( `send data update to client the room update count to: ${socket.rooms.size}`);
+          logger.debug(
+            `send data update to client the room update count to: ${socket.rooms.size}`
+          );
           if (topicRoom && topicRoom.size > 1) {
             namespace.in(`${room}:count`).emit("dataUpdate", {
               type: "count",
-              eventTopics: room,
+              topic: room,
               count: topicRoom.size - 1,
             });
           }
@@ -142,16 +144,19 @@ io.of(/\/(.+)/).on("connection", (socket, request) => {
 // HTTP 接口用于触发实时更新
 // 创建 Koa 路由器
 function cors() {
-    return async (ctx, next) => {
-        ctx.set("Access-Control-Allow-Origin", "*");
-        ctx.set("Access-Control-Allow-Methods", "OPTIONS, GET, POST, PUT, PATCH, DELETE");
-        ctx.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
-        if (ctx.request.method === "OPTIONS") {
-            ctx.status = 200;
-            return;
-        }
-        await next();
-    };
+  return async (ctx, next) => {
+    ctx.set("Access-Control-Allow-Origin", "*");
+    ctx.set(
+      "Access-Control-Allow-Methods",
+      "OPTIONS, GET, POST, PUT, PATCH, DELETE"
+    );
+    ctx.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    if (ctx.request.method === "OPTIONS") {
+      ctx.status = 200;
+      return;
+    }
+    await next();
+  };
 }
 const app = new Koa();
 const router = new Router();
@@ -166,10 +171,12 @@ router.post("/notify", async (ctx) => {
       ctx.request.body;
 
     // 默认事件名为 dataUpdate
-  const effectiveEventName = eventName || "dataUpdate";
+    const effectiveEventName = eventName || "dataUpdate";
 
     // 默认数据对象为 httpRequest
     const effectiveData = data || { type: "httpRequest" };
+
+
 
     // 获取 Socket.IO 名字空间实例
     const namespace = io.of(`/${appId}`);
@@ -191,6 +198,8 @@ router.post("/notify", async (ctx) => {
     // 向指定 eventTopics 的房间发送通知
     if (eventTopics && Array.isArray(eventTopics)) {
       eventTopics.forEach((topic) => {
+        // 默认的 eventTopics
+        effectiveData.topic = eventTopics || "";
         namespace.in(topic).emit(effectiveEventName, effectiveData);
       });
     }
@@ -198,7 +207,7 @@ router.post("/notify", async (ctx) => {
     ctx.status = 200;
     ctx.body = { message: "Notification sent successfully" };
   } catch (error) {
-    logger.error(`error`, error)
+    logger.error(`error`, error);
     ctx.status = 500;
     ctx.body = { error: "Failed to send notification" };
   }
