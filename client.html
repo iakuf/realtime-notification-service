@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Socket.IO Client</title>
+<style>
+  body { font-family: Arial, sans-serif; }
+  .client { margin-bottom: 20px; border: 1px solid #ccc; padding: 10px; }
+  .client h2 { margin-bottom: 10px; }
+  .client input, .client button { margin-bottom: 10px; display: block; }
+  .client p { margin: 5px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+  <div id="client1" class="client">
+    <h2>Client 1</h2>
+    <input type="text" id="topicInput1" placeholder="Enter topic to subscribe">
+    <button id="subscribe1">Subscribe</button>
+    <button id="disconnect1">Disconnect</button>
+    <p>Subscribed Topics: <span id="topics1"></span></p>
+    <p>Messages:</p>
+    <ul id="messages1"></ul>
+    <p>Number of subscribers: <span id="subscribers1">0</span></p>
+  </div>
+  <div id="client2" class="client">
+    <h2>Client 2</h2>
+    <input type="text" id="topicInput2" placeholder="Enter topic to subscribe">
+    <button id="subscribe2">Subscribe</button>
+    <button id="disconnect2">Disconnect</button>
+    <p>Subscribed Topics: <span id="topics2"></span></p>
+    <p>Messages:</p>
+    <ul id="messages2"></ul>
+    <p>Number of subscribers: <span id="subscribers2">0</span></p>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  var clients = [
+    {
+      socket: io(`http://localhost:3000/112232`, {
+        extraHeaders: {
+          "X-App-Id": "your-app-id-here",
+          "X-Client-Id": "client1",
+          "X-Device-Id": "device1",
+        },
+        query: "debug=1",
+      }),
+      topics: [],
+      messagesEl: document.getElementById("messages1"),
+      topicsEl: document.getElementById("topics1"),
+      subscribersEl: document.getElementById("subscribers1"),
+    },
+    {
+      socket: io(`http://localhost:3000/112232`, {
+        extraHeaders: {
+          "X-App-Id": "your-app-id-here",
+          "X-Client-Id": "client2",
+          "X-Device-Id": "device2",
+        },
+        query: "debug=1",
+      }),
+      topics: [],
+      messagesEl: document.getElementById("messages2"),
+      topicsEl: document.getElementById("topics2"),
+      subscribersEl: document.getElementById("subscribers2"),
+    },
+  ];
+
+  function subscribeTopic(clientIndex) {
+    var client = clients[clientIndex - 1];
+    var topicInput = document.getElementById("topicInput" + clientIndex);
+    var topic = topicInput.value;
+    if (validateTopic(topic)) {
+      client.socket.emit("subscribe", [topic]);
+      client.topics.push(topic);
+      client.topicsEl.textContent = client.topics.join(", ");
+      topicInput.value = "";
+
+      // Join the count room for the topic
+      client.socket.emit("subscribeCount", [topic]);
+      console.log(`User joined count room: ${topic}:count`);
+    } else {
+      alert("Invalid topic format. Please use 'eventIdentifier:eventType'.");
+    }
+  }
+
+  function validateTopic(topic) {
+    var regex = /^(\w+):(\w+)$/;
+    return regex.test(topic);
+  }
+
+  function disconnectClient(clientIndex) {
+    var client = clients[clientIndex - 1];
+    client.socket.disconnect();
+    client.socket.off(); // Remove all listeners
+    client.socket = null; // Reset the socket object
+    client.topics = [];
+    client.topicsEl.textContent = "";
+    client.messagesEl.innerHTML = "";
+    client.subscribersEl.textContent = "0";
+  }
+
+  clients.forEach(function (client, index) {
+    document.getElementById("subscribe" + (index + 1)).onclick = function () {
+      subscribeTopic(index + 1);
+    };
+    document.getElementById("disconnect" + (index + 1)).onclick = function () {
+      disconnectClient(index + 1);
+    };
+
+    client.socket.on("connect", function () {
+      console.log(`Client ${index + 1} connected.`);
+      
+      // Ensure dataUpdate listener is bound
+      if (!client.socket.hasListeners("dataUpdate")) {
+        client.socket.on("dataUpdate", function (payload) {
+          console.log(`client ${index} payload`, payload);
+          if (payload.type === "count") {
+            client.subscribersEl.textContent = payload.count;
+          } else {
+            var li = document.createElement("li");
+            li.textContent = `Received update: ${JSON.stringify(payload)}`;
+            client.messagesEl.appendChild(li);
+          }
+        });
+      }
+    });
+
+    client.socket.on("reconnect", function () {
+      console.log(`Client ${index + 1} reconnected.`);
+    });
+  });
+});
+</script>
+</body>
+</html>
