@@ -175,6 +175,9 @@ router.post("/notify", async (ctx) => {
 
     // 默认数据对象为 httpRequest
     const effectiveData = data || { type: "httpRequest" };
+    if (!effectiveData.type) {
+        effectiveData.type = "httpRequest"
+    }
 
 
 
@@ -199,7 +202,9 @@ router.post("/notify", async (ctx) => {
     if (eventTopics && Array.isArray(eventTopics)) {
       eventTopics.forEach((topic) => {
         // 默认的 eventTopics
-        effectiveData.topic = eventTopics || "";
+        effectiveData.topic = topic || "";
+        logger.info(`send eventtopice: ${topic}, this.app ${appId} data ${JSON.stringify(effectiveData)}`);
+        console.log(namespace.adapter.rooms);
         namespace.in(topic).emit(effectiveEventName, effectiveData);
       });
     }
