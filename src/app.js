@@ -94,7 +94,7 @@ io.of(/\/(.+)/).on("connection", (socket, request) => {
         var topicRoomCount = namespace.adapter.rooms.get(topicCountKey);
         if (topicRoomCount && topicRoomCount.size > 0) {
           logger.debug(`${socket.id} 名字空间 ${appId} 的订阅者增加，通知其它 ${topic} 订阅者更新订阅数量 ${topicRoom.size}`);
-          namespace.in(`${topic}:count`).emit("dataUpdate", {
+          namespace.in(topicCountKey).emit("dataUpdate", {
             type: "count",
             topic: topic,
             count: topicRoom.size,
@@ -121,7 +121,7 @@ io.of(/\/(.+)/).on("connection", (socket, request) => {
           var topicRoom = namespace.adapter.rooms.get(room);
           // 发送房间内用户数量更新的通知给所有订阅了room:count的客户端
           logger.debug(
-            `send data update to client the room update count to: ${socket.rooms.size}`
+            `发送断开的信息给这个客户端所在的所有房间，这个房间 ${room} 有 ${topicRoom.szie} 个客户端.`
           );
           if (topicRoom && topicRoom.size > 1) {
             namespace.in(`${room}:count`).emit("dataUpdate", {
