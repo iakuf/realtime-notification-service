@@ -70,16 +70,16 @@ io.of(/\/(.+)/).on("connection", (socket, request) => {
   // 加入基于 clientId 和 deviceId 的房间
   if (clientId) {
     socket.join(clientId);
-    logger.info(`${socket.id} 新增加一个 Client: ${clientId}`);
+    logger.info(`${socket.id} 名字空间 ${appId} 新增加一个 Client: ${clientId}`);
   }
   if (deviceId) {
     socket.join(deviceId);
-    logger.info(`${socket.id} 新增加一个 Device: ${deviceId}`);
+    logger.info(`${socket.id} 名字空间 ${appId} 新增加一个 Device: ${deviceId}`);
   }
 
   socket.on("subscribe", (eventTopics) => {
     if (!Array.isArray(eventTopics)) {
-      logger.warn(`${socket.id} 错误的 subscribe 格式, ${eventTopics}`);
+      logger.warn(`${socket.id} 名字空间 ${appId} 错误的 subscribe 格式, ${eventTopics}`);
       return;
     }
     eventTopics.forEach((topic) => {
@@ -93,7 +93,7 @@ io.of(/\/(.+)/).on("connection", (socket, request) => {
         let topicCountKey = topic + ":count";
         var topicRoomCount = namespace.adapter.rooms.get(topicCountKey);
         if (topicRoomCount && topicRoomCount.size > 0) {
-          logger.debug(`${socket.id} 增加后，通知其它 ${topic} 订阅者更新订阅数量 ${topicRoom.size}`);
+          logger.debug(`${socket.id} 名字空间 ${appId} 的订阅者增加，通知其它 ${topic} 订阅者更新订阅数量 ${topicRoom.size}`);
           namespace.in(`${topic}:count`).emit("dataUpdate", {
             type: "count",
             topic: topic,
@@ -107,7 +107,7 @@ io.of(/\/(.+)/).on("connection", (socket, request) => {
   socket.on("subscribeCount", (eventTopics) => {
     eventTopics.forEach((topic) => {
       socket.join(`${topic}:count`);
-      logger.info(`${socket.io} 订阅 ${topic} 的在线数量`);
+      logger.info(`${socket.io} 名字空间 ${appId} 订阅了 ${topic} 的在线数量`);
     });
   });
 
@@ -131,7 +131,7 @@ io.of(/\/(.+)/).on("connection", (socket, request) => {
             });
           }
         }
-        logger.debug(`User left room: ${room}`);
+        logger.debug(`${socket.io} 用户离开了名字空间: ${appId} 和 room: ${room}`);
       }
     });
   });
