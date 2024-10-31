@@ -70,16 +70,16 @@ io.of(/\/(.+)/).on("connection", (socket, request) => {
   // 加入基于 clientId 和 deviceId 的房间
   if (clientId) {
     socket.join(clientId);
-    logger.info(`User joined room: ${clientId}`);
+    logger.info(`${socket.id} 新增加一个 Client: ${clientId}`);
   }
   if (deviceId) {
     socket.join(deviceId);
-    logger.info(`Device joined room: ${deviceId}`);
+    logger.info(`${socket.id} 新增加一个 Device: ${deviceId}`);
   }
 
   socket.on("subscribe", (eventTopics) => {
     if (!Array.isArray(eventTopics)) {
-      logger.warn("Invalid event topics format");
+      logger.warn(`${socket.id} 错误的 subscribe 格式, ${eventTopics}`);
       return;
     }
     eventTopics.forEach((topic) => {
@@ -89,14 +89,11 @@ io.of(/\/(.+)/).on("connection", (socket, request) => {
       var topicRoom = namespace.adapter.rooms.get(topic);
       if (topicRoom && topicRoom.size > 0) {
         // 发送房间内用户数量更新的通知给所有订阅了topic:count的客户端
-        logger.debug(`topicRoom.size: ${topicRoom.size}`);
 
         let topicCountKey = topic + ":count";
         var topicRoomCount = namespace.adapter.rooms.get(topicCountKey);
         if (topicRoomCount && topicRoomCount.size > 0) {
-          logger.debug(
-            `topicRoom has Count: ${topicRoomCount.size} to send update count`
-          );
+          logger.debug(`${socket.id} 增加后，通知其它 ${topic} 订阅者更新订阅数量 ${topicRoom.size}`);
           namespace.in(`${topic}:count`).emit("dataUpdate", {
             type: "count",
             topic: topic,
@@ -104,14 +101,13 @@ io.of(/\/(.+)/).on("connection", (socket, request) => {
           });
         }
       }
-      logger.info(`User subscribe room: ${topic}`);
     });
   });
 
   socket.on("subscribeCount", (eventTopics) => {
     eventTopics.forEach((topic) => {
       socket.join(`${topic}:count`);
-      logger.info(`User subscribe count room: ${topic}:count`);
+      logger.info(`${socket.io} 订阅 ${topic} 的在线数量`);
     });
   });
 
@@ -167,8 +163,7 @@ const server = http.createServer(app.callback());
 io.attach(server);
 router.post("/notify", async (ctx) => {
   try {
-    const { appId, users, devices, eventTopics, eventName, data } =
-      ctx.request.body;
+    const { appId, users, devices, eventTopics, eventName, data } = ctx.request.body;
 
     // 默认事件名为 dataUpdate
     const effectiveEventName = eventName || "dataUpdate";
@@ -178,8 +173,6 @@ router.post("/notify", async (ctx) => {
     if (!effectiveData.type) {
         effectiveData.type = "httpRequest"
     }
-
-
 
     // 获取 Socket.IO 名字空间实例
     const namespace = io.of(`/${appId}`);
@@ -203,7 +196,7 @@ router.post("/notify", async (ctx) => {
       eventTopics.forEach((topic) => {
         // 默认的 eventTopics
         effectiveData.topic = topic || "";
-        logger.info(`send eventtopice: ${topic}, this.app ${appId} data ${JSON.stringify(effectiveData)}`);
+        logger.info(`发送通知给 topice 名: ${topic}, 通知的范围是 appid: ${appId} 数据是 ${JSON.stringify(effectiveData)}`);
         namespace.in(topic).emit(effectiveEventName, effectiveData);
       });
     }

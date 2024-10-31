@@ -40,11 +40,11 @@
 document.addEventListener("DOMContentLoaded", function () {
   var clients = [
     {
-      socket: io(`http://localhost:3000/112232`, {
+      socket: io(`https://push.listlive.cn/112232`, {
         extraHeaders: {
           "X-App-Id": "your-app-id-here",
-          "X-Client-Id": "client1",
-          "X-Device-Id": "device1",
+          "X-Client-Id": "66f96de514d9e2960c573006",
+          "X-Device-Id": "17302795609222040021",
         },
         query: "debug=1",
       }),
@@ -54,7 +54,7 @@ document.addEventListener("DOMContentLoaded", function () {
       subscribersEl: document.getElementById("subscribers1"),
     },
     {
-      socket: io(`http://localhost:3000/112232`, {
+      socket: io(`https://push.listlive.cn/112232`, {
         extraHeaders: {
           "X-App-Id": "your-app-id-here",
           "X-Client-Id": "client2",
