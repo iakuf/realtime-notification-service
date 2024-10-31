@@ -60,7 +60,7 @@ io.of(/\/(.+)/).on("connection", (socket, request) => {
   const namespace = socket.nsp;
   const appId = namespace.name.replace(/^\//, ""); // 获取 appId
   logger.info(
-    `User connected to namespace appid ${appId} socketid ${socket.id}`
+    `${socket.id} 连接上名字空间 ${appId}`
   );
 
   // 获取客户端传递的 clientId 和 deviceId
