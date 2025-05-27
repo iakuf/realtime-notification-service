@@ -1,16 +1,17 @@
 "use strict";
-import Koa from "koa";
-import bodyParser from "koa-bodyparser";
-import http from "http";
-import https from "https";
-import Router from "koa-router";
-import { instrument } from "@socket.io/admin-ui";
-
+import uWebKoa from "uwebkoa";
 import { createLogger, format, transports } from "winston";
+import { instrument } from "@socket.io/admin-ui";
 
 import { Server } from "socket.io";
 import Redis from "ioredis";
 import { createAdapter } from "@socket.io/redis-streams-adapter";
+
+// 导入新的架构组件
+import { NotificationService } from "./services/NotificationService.js";
+import { NotificationController } from "./controllers/NotificationController.js";
+import { setupNotificationRoutes } from "./routes/notificationRoutes.js";
+import { errorHandler } from "./middlewares/errorHandler.js";
 
 export const opts = {
   pingInterval: 5000, // 每5秒发送一次ping消息
@@ -30,7 +31,7 @@ export const opts = {
 };
 
 const logger = createLogger({
-  level: "debug",
+  level: process.env.NODE_ENV === 'test' ? "error" : "debug",
   format: format.combine(format.timestamp(), format.json()),
   defaultMeta: { service: "socket-server" },
   transports: [
@@ -44,7 +45,7 @@ let redisClient = null;
 let ioConfig = { ...opts };
 
 // 只有在非测试环境中才使用Redis
-if (process.env.NODE_ENV !== 'test') {
+if (process.env.NODE_ENV !== "test") {
   try {
     redisClient = new Redis();
     redisClient.on("error", (err) => {
@@ -61,16 +62,12 @@ const io = new Server(ioConfig);
 instrument(io, {
   auth: false,
 });
-// 对默认命名空间进行认证
-// io.use(socketAuthMiddleware());
 
 // 注册名字空间处理器
 io.of(/\/(.+)/).on("connection", (socket, request) => {
   const namespace = socket.nsp;
   const appId = namespace.name.replace(/^\//, ""); // 获取 appId
-  logger.info(
-    `${socket.id} 连接上名字空间 ${appId}`
-  );
+  logger.info(`${socket.id} 连接上名字空间 ${appId}`);
 
   // 获取客户端传递的 clientId 和 deviceId
   const clientId = socket.handshake.headers["x-client-id"];
@@ -79,16 +76,22 @@ io.of(/\/(.+)/).on("connection", (socket, request) => {
   // 加入基于 clientId 和 deviceId 的房间
   if (clientId) {
     socket.join(clientId);
-    logger.info(`${socket.id} 名字空间 ${appId} 新增加一个 Client: ${clientId}`);
+    logger.info(
+      `${socket.id} 名字空间 ${appId} 新增加一个 Client: ${clientId}`
+    );
   }
   if (deviceId) {
     socket.join(deviceId);
-    logger.info(`${socket.id} 名字空间 ${appId} 新增加一个 Device: ${deviceId}`);
+    logger.info(
+      `${socket.id} 名字空间 ${appId} 新增加一个 Device: ${deviceId}`
+    );
   }
 
   socket.on("subscribe", (eventTopics) => {
     if (!Array.isArray(eventTopics)) {
-      logger.warn(`${socket.id} 名字空间 ${appId} 错误的 subscribe 格式, ${eventTopics}`);
+      logger.warn(
+        `${socket.id} 名字空间 ${appId} 错误的 subscribe 格式, ${eventTopics}`
+      );
       return;
     }
     eventTopics.forEach((topic) => {
@@ -98,11 +101,12 @@ io.of(/\/(.+)/).on("connection", (socket, request) => {
       var topicRoom = namespace.adapter.rooms.get(topic);
       if (topicRoom && topicRoom.size > 0) {
         // 发送房间内用户数量更新的通知给所有订阅了topic:count的客户端
-
         let topicCountKey = topic + ":count";
         var topicRoomCount = namespace.adapter.rooms.get(topicCountKey);
         if (topicRoomCount && topicRoomCount.size > 0) {
-          logger.debug(`${socket.id} 名字空间 ${appId} 的订阅者增加，通知其它 ${topic} 订阅者更新订阅数量 ${topicRoom.size}`);
+          logger.debug(
+            `${socket.id} 名字空间 ${appId} 的订阅者增加，通知其它 ${topic} 订阅者更新订阅数量 ${topicRoom.size}`
+          );
           namespace.in(topicCountKey).emit("dataUpdate", {
             type: "count",
             topic: topic,
@@ -130,7 +134,9 @@ io.of(/\/(.+)/).on("connection", (socket, request) => {
           var topicRoom = namespace.adapter.rooms.get(room);
           // 发送房间内用户数量更新的通知给所有订阅了room:count的客户端
           logger.debug(
-            `发送断开的信息给这个客户端所在的所有房间，这个房间 ${room} 有 ${topicRoom?.size || 0} 个客户端.`
+            `发送断开的信息给这个客户端所在的所有房间，这个房间 ${room} 有 ${
+              topicRoom?.size || 0
+            } 个客户端.`
           );
           if (topicRoom && topicRoom.size > 1) {
             namespace.in(`${room}:count`).emit("dataUpdate", {
@@ -140,94 +146,81 @@ io.of(/\/(.+)/).on("connection", (socket, request) => {
             });
           }
         }
-        logger.debug(`${socket.id} 用户离开了名字空间: ${appId} 和 room: ${room}`);
+        logger.debug(
+          `${socket.id} 用户离开了名字空间: ${appId} 和 room: ${room}`
+        );
       }
     });
   });
 });
 
-// HTTP 接口用于触发实时更新
-// 创建 Koa 路由器
-function cors() {
-  return async (ctx, next) => {
-    ctx.set("Access-Control-Allow-Origin", "*");
-    ctx.set(
-      "Access-Control-Allow-Methods",
-      "OPTIONS, GET, POST, PUT, PATCH, DELETE"
-    );
-    ctx.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
-    if (ctx.request.method === "OPTIONS") {
-      ctx.status = 200;
-      return;
-    }
-    await next();
-  };
-}
-const app = new Koa();
-const router = new Router();
-app.use(bodyParser());
-app.use(cors());
-app.use(router.routes()).use(router.allowedMethods());
-const server = http.createServer(app.callback());
-io.attach(server);
-router.post("/notify", async (ctx) => {
-  try {
-    const { appId, users, devices, eventTopics, eventName, data } = ctx.request.body;
+// 创建 uWebKoa 实例
+const app = new uWebKoa();
 
-    // 默认事件名为 dataUpdate
-    const effectiveEventName = eventName || "dataUpdate";
+// 获取 uWebSocket.js 应用实例
+const uWebSocketApp = app.getUWebSocketApp();
 
-    // 默认数据对象为 httpRequest
-    const effectiveData = data || { type: "httpRequest" };
-    if (!effectiveData.type) {
-        effectiveData.type = "httpRequest"
-    }
+// 将 Socket.IO 附加到 uWebSocket.js 应用
+io.attachApp(uWebSocketApp);
 
-    // 获取 Socket.IO 名字空间实例
-    const namespace = io.of(`/${appId}`);
+// 将 io 实例挂到 uWebKoa 上下文，方便其他地方使用
+app.context.io = io;
 
-    // 向指定用户发送通知
-    if (users && Array.isArray(users)) {
-      users.forEach((user) => {
-        namespace.in(user).emit(effectiveEventName, effectiveData);
-      });
-    }
+// 创建服务层和控制器实例
+const notificationService = new NotificationService(io, logger);
+const notificationController = new NotificationController(notificationService, logger);
 
-    // 向指定设备发送通知
-    if (devices && Array.isArray(devices)) {
-      devices.forEach((device) => {
-        namespace.in(device).emit(effectiveEventName, effectiveData);
-      });
-    }
+// 添加全局中间件
+app.use(errorHandler(logger));
 
-    // 向指定 eventTopics 的房间发送通知
-    if (eventTopics && Array.isArray(eventTopics)) {
-      eventTopics.forEach((topic) => {
-        // 默认的 eventTopics
-        effectiveData.topic = topic || "";
-        logger.info(`发送通知给 topice 名: ${topic}, 通知的范围是 appid: ${appId} 数据是 ${JSON.stringify(effectiveData)}`);
-        namespace.in(topic).emit(effectiveEventName, effectiveData);
-      });
-    }
-
+// 添加 CORS 中间件
+app.use(async (ctx, next) => {
+  ctx.set("Access-Control-Allow-Origin", "*");
+  ctx.set(
+    "Access-Control-Allow-Methods",
+    "OPTIONS, GET, POST, PUT, PATCH, DELETE"
+  );
+  ctx.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  if (ctx.request.method === "OPTIONS") {
     ctx.status = 200;
-    ctx.body = { message: "Notification sent successfully" };
-  } catch (error) {
-    logger.error(`error`, error);
-    ctx.status = 500;
-    ctx.body = { error: "Failed to send notification" };
+    return;
   }
+  await next();
 });
+
+// 添加请求日志中间件
+app.use(async (ctx, next) => {
+  const start = Date.now();
+  await next();
+  const ms = Date.now() - start;
+  
+  logger.info(`${ctx.method} ${ctx.url} - ${ctx.status} - ${ms}ms`, {
+    method: ctx.method,
+    url: ctx.url,
+    status: ctx.status,
+    responseTime: ms,
+    userAgent: ctx.request.headers['user-agent'] || 'unknown',
+    ip: ctx.request.ip || ctx.request.headers['x-forwarded-for'] || 'unknown'
+  });
+});
+
+// 设置路由
+setupNotificationRoutes(app, notificationController);
 
 // 启动服务器
 const PORT = process.env.PORT || 3000;
 
+let server = null;
+
 // 只有在非测试环境下才自动启动服务器
-if (process.env.NODE_ENV !== 'test') {
-  server.listen(PORT, () => {
+if (process.env.NODE_ENV !== "test") {
+  server = app.listen(PORT, () => {
     logger.info(`Server is running on port ${PORT}`);
   });
+} else {
+  // 测试环境下，server就是app本身，提供测试需要的方法
+  server = app;
 }
 
 // 导出测试需要的组件
-export { server, io, app, logger, redisClient };
+export { server, io, app, logger, redisClient, notificationService, notificationController };

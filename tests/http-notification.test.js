@@ -1,9 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest'
 import { createTestServer, createClient, waitForEvent, delay } from './helpers/test-utils.js'
-import supertest from 'supertest'
 
 describe('HTTP通知接口测试', () => {
-  let server, io, app, serverPort, request
+  let server, io, app, serverPort
   let clients = []
 
   beforeAll(async () => {
@@ -15,7 +14,6 @@ describe('HTTP通知接口测试', () => {
     await new Promise((resolve) => {
       server.listen(0, () => {
         serverPort = server.address().port
-        request = supertest(`http://localhost:${serverPort}`)
         resolve()
       })
     })
@@ -38,6 +36,31 @@ describe('HTTP通知接口测试', () => {
     await delay(100)
   })
 
+  // 辅助函数：发送HTTP请求
+  const sendNotifyRequest = async (body) => {
+    const response = await fetch(`http://localhost:${serverPort}/notify`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    })
+    
+    const responseBody = await response.text()
+    let parsedBody = null
+    try {
+      parsedBody = JSON.parse(responseBody)
+    } catch (e) {
+      // 如果不是JSON，保持原样
+      parsedBody = responseBody
+    }
+    
+    return {
+      status: response.status,
+      body: parsedBody
+    }
+  }
+
   describe('向用户发送通知', () => {
     it('应该能够向指定用户发送通知', async () => {
       const appId = 'notify-app-1'
@@ -52,13 +75,11 @@ describe('HTTP通知接口测试', () => {
       const messagePromise = waitForEvent(client, 'dataUpdate')
       
       // 发送HTTP通知
-      const response = await request
-        .post('/notify')
-        .send({
-          appId,
-          users: [clientId],
-          data: { message: 'Hello User', customField: 'test' }
-        })
+      const response = await sendNotifyRequest({
+        appId,
+        users: [clientId],
+        data: { message: 'Hello User', customField: 'test' }
+      })
       
       expect(response.status).toBe(200)
       expect(response.body.message).toBe('Notification sent successfully')
@@ -90,13 +111,11 @@ describe('HTTP通知接口测试', () => {
       )
       
       // 发送HTTP通知
-      const response = await request
-        .post('/notify')
-        .send({
-          appId,
-          users,
-          data: { broadcast: true, timestamp: Date.now() }
-        })
+      const response = await sendNotifyRequest({
+        appId,
+        users,
+        data: { broadcast: true, timestamp: Date.now() }
+      })
       
       expect(response.status).toBe(200)
       
@@ -113,13 +132,11 @@ describe('HTTP通知接口测试', () => {
       const appId = 'notify-app-3'
       
       // 发送通知给不存在的用户
-      const response = await request
-        .post('/notify')
-        .send({
-          appId,
-          users: ['non-existent-user'],
-          data: { message: 'This will not be received' }
-        })
+      const response = await sendNotifyRequest({
+        appId,
+        users: ['non-existent-user'],
+        data: { message: 'This will not be received' }
+      })
       
       expect(response.status).toBe(200)
       expect(response.body.message).toBe('Notification sent successfully')
@@ -140,13 +157,11 @@ describe('HTTP通知接口测试', () => {
       const messagePromise = waitForEvent(client, 'dataUpdate')
       
       // 发送HTTP通知
-      const response = await request
-        .post('/notify')
-        .send({
-          appId,
-          devices: [deviceId],
-          data: { deviceMessage: 'Hello Device' }
-        })
+      const response = await sendNotifyRequest({
+        appId,
+        devices: [deviceId],
+        data: { deviceMessage: 'Hello Device' }
+      })
       
       expect(response.status).toBe(200)
       
@@ -175,13 +190,11 @@ describe('HTTP通知接口测试', () => {
       )
       
       // 发送HTTP通知
-      const response = await request
-        .post('/notify')
-        .send({
-          appId,
-          devices,
-          data: { multiDevice: true }
-        })
+      const response = await sendNotifyRequest({
+        appId,
+        devices,
+        data: { multiDevice: true }
+      })
       
       expect(response.status).toBe(200)
       
@@ -210,13 +223,11 @@ describe('HTTP通知接口测试', () => {
       const messagePromise = waitForEvent(client, 'dataUpdate')
       
       // 发送HTTP通知
-      const response = await request
-        .post('/notify')
-        .send({
-          appId,
-          eventTopics: [topic],
-          data: { paymentId: '12345', amount: 100 }
-        })
+      const response = await sendNotifyRequest({
+        appId,
+        eventTopics: [topic],
+        data: { paymentId: '12345', amount: 100 }
+      })
       
       expect(response.status).toBe(200)
       
@@ -253,13 +264,11 @@ describe('HTTP通知接口测试', () => {
       ]
       
       // 发送HTTP通知
-      const response = await request
-        .post('/notify')
-        .send({
-          appId,
-          eventTopics: topics,
-          data: { multiTopicMessage: true }
-        })
+      const response = await sendNotifyRequest({
+        appId,
+        eventTopics: topics,
+        data: { multiTopicMessage: true }
+      })
       
       expect(response.status).toBe(200)
       
@@ -298,13 +307,11 @@ describe('HTTP通知接口测试', () => {
       )
       
       // 发送HTTP通知
-      const response = await request
-        .post('/notify')
-        .send({
-          appId,
-          eventTopics: [topic],
-          data: { broadcastMessage: 'Hello All Subscribers' }
-        })
+      const response = await sendNotifyRequest({
+        appId,
+        eventTopics: [topic],
+        data: { broadcastMessage: 'Hello All Subscribers' }
+      })
       
       expect(response.status).toBe(200)
       
@@ -350,15 +357,13 @@ describe('HTTP通知接口测试', () => {
       ]
       
       // 发送混合通知
-      const response = await request
-        .post('/notify')
-        .send({
-          appId,
-          users: [userId],
-          devices: [deviceId],
-          eventTopics: [topic],
-          data: { mixedNotification: true, timestamp: Date.now() }
-        })
+      const response = await sendNotifyRequest({
+        appId,
+        users: [userId],
+        devices: [deviceId],
+        eventTopics: [topic],
+        data: { mixedNotification: true, timestamp: Date.now() }
+      })
       
       expect(response.status).toBe(200)
       
@@ -394,14 +399,12 @@ describe('HTTP通知接口测试', () => {
       const messagePromise = waitForEvent(client, customEventName)
       
       // 发送自定义事件通知
-      const response = await request
-        .post('/notify')
-        .send({
-          appId,
-          users: [clientId],
-          eventName: customEventName,
-          data: { customData: 'test' }
-        })
+      const response = await sendNotifyRequest({
+        appId,
+        users: [clientId],
+        eventName: customEventName,
+        data: { customData: 'test' }
+      })
       
       expect(response.status).toBe(200)
       
@@ -422,12 +425,10 @@ describe('HTTP通知接口测试', () => {
       const messagePromise = waitForEvent(client, 'dataUpdate')
       
       // 发送最小化通知（只有必需参数）
-      const response = await request
-        .post('/notify')
-        .send({
-          appId,
-          users: [clientId]
-        })
+      const response = await sendNotifyRequest({
+        appId,
+        users: [clientId]
+      })
       
       expect(response.status).toBe(200)
       
@@ -439,25 +440,51 @@ describe('HTTP通知接口测试', () => {
 
   describe('错误处理测试', () => {
     it('应该处理缺少appId的请求', async () => {
-      const response = await request
-        .post('/notify')
-        .send({
-          users: ['user123'],
-          data: { test: true }
-        })
+      const response = await sendNotifyRequest({
+        users: ['user123'],
+        data: { test: true }
+      })
       
-      // 应该仍然返回成功，但实际不会发送消息
-      expect(response.status).toBe(200)
+      // 现在有了AJV验证，缺少必需参数appId应该返回400
+      expect(response.status).toBe(400)
+      expect(response.body.error).toBe('Invalid request parameters')
     })
 
-    it('应该处理服务器内部错误', async () => {
+    it('应该处理无效的JSON格式请求', async () => {
       // 创建一个会导致错误的请求 - 使用无效的JSON格式
-      const response = await request
-        .post('/notify')
-        .set('Content-Type', 'application/json')
-        .send('invalid json string')
+      const response = await fetch(`http://localhost:${serverPort}/notify`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: 'invalid json string'
+      })
       
       expect(response.status).toBe(400) // bodyParser会返回400而不是500
+    })
+
+    it('应该处理不提供目标的请求', async () => {
+      // 只有appId但没有users, devices, eventTopics
+      const response = await sendNotifyRequest({
+        appId: 'test-app',
+        data: { test: true }
+      })
+      
+      expect(response.status).toBe(400)
+      expect(response.body.error).toBe("At least one of 'users', 'devices', or 'eventTopics' must be provided")
+    })
+
+    it('应该处理超长的appId', async () => {
+      const longAppId = 'a'.repeat(101) // 超过100字符限制
+      
+      const response = await sendNotifyRequest({
+        appId: longAppId,
+        users: ['user123'],
+        data: { test: true }
+      })
+      
+      expect(response.status).toBe(400)
+      expect(response.body.error).toBe('Invalid request parameters')
     })
   })
 }) 

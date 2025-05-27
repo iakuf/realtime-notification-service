@@ -1,9 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest'
 import { createTestServer, createClient, waitForEvent, delay } from './helpers/test-utils.js'
-import supertest from 'supertest'
 
 describe('综合业务场景测试', () => {
-  let server, io, serverPort, request
+  let server, io, serverPort
   let clients = []
 
   beforeAll(async () => {
@@ -14,7 +13,6 @@ describe('综合业务场景测试', () => {
     await new Promise((resolve) => {
       server.listen(0, () => {
         serverPort = server.address().port
-        request = supertest(`http://localhost:${serverPort}`)
         resolve()
       })
     })
@@ -36,6 +34,31 @@ describe('综合业务场景测试', () => {
     clients = []
     await delay(200)
   })
+
+  // 辅助函数：发送HTTP请求
+  const sendNotifyRequest = async (body) => {
+    const response = await fetch(`http://localhost:${serverPort}/notify`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    })
+    
+    const responseBody = await response.text()
+    let parsedBody = null
+    try {
+      parsedBody = JSON.parse(responseBody)
+    } catch (e) {
+      // 如果不是JSON，保持原样
+      parsedBody = responseBody
+    }
+    
+    return {
+      status: response.status,
+      body: parsedBody
+    }
+  }
 
   describe('电商支付通知场景', () => {
     it('应该支持完整的支付流程通知', async () => {
@@ -75,21 +98,19 @@ describe('综合业务场景测试', () => {
         waitForEvent(orderClient, 'dataUpdate')
       ]
 
-      await request
-        .post('/notify')
-        .send({
-          appId,
-          users: [userId],
-          devices: [deviceId],
-          eventTopics: [`order:${orderId}:status`],
-          data: {
-            type: 'payment',
-            status: 'processing',
-            orderId,
-            amount: 99.99,
-            timestamp: Date.now()
-          }
-        })
+      await sendNotifyRequest({
+        appId,
+        users: [userId],
+        devices: [deviceId],
+        eventTopics: [`order:${orderId}:status`],
+        data: {
+          type: 'payment',
+          status: 'processing',
+          orderId,
+          amount: 99.99,
+          timestamp: Date.now()
+        }
+      })
 
       // 验证所有相关客户端都收到支付开始通知
       const [userData, deviceData, orderData] = await Promise.all(paymentStartPromises)
@@ -108,21 +129,19 @@ describe('综合业务场景测试', () => {
         waitForEvent(orderClient, 'dataUpdate')
       ]
 
-      await request
-        .post('/notify')
-        .send({
-          appId,
-          users: [userId],
-          devices: [deviceId],
-          eventTopics: [`order:${orderId}:status`],
-          data: {
-            type: 'payment',
-            status: 'success',
-            orderId,
-            transactionId: 'txn-abc123',
-            amount: 99.99
-          }
-        })
+      await sendNotifyRequest({
+        appId,
+        users: [userId],
+        devices: [deviceId],
+        eventTopics: [`order:${orderId}:status`],
+        data: {
+          type: 'payment',
+          status: 'success',
+          orderId,
+          transactionId: 'txn-abc123',
+          amount: 99.99
+        }
+      })
 
       const [successUserData, successDeviceData, successOrderData] = await Promise.all(paymentSuccessPromises)
       
@@ -175,19 +194,17 @@ describe('综合业务场景测试', () => {
         waitForEvent(client, 'dataUpdate')
       )
 
-      await request
-        .post('/notify')
-        .send({
-          appId,
-          eventTopics: [`chat:${roomId}`],
-          data: {
-            type: 'message',
-            messageType: 'group',
-            from: 'alice',
-            content: 'Hello everyone!',
-            timestamp: Date.now()
-          }
-        })
+      await sendNotifyRequest({
+        appId,
+        eventTopics: [`chat:${roomId}`],
+        data: {
+          type: 'message',
+          messageType: 'group',
+          from: 'alice',
+          content: 'Hello everyone!',
+          timestamp: Date.now()
+        }
+      })
 
       // 验证所有群聊成员都收到消息
       const messages = await Promise.all(messagePromises)
@@ -204,19 +221,17 @@ describe('综合业务场景测试', () => {
         'dataUpdate'
       )
 
-      await request
-        .post('/notify')
-        .send({
-          appId,
-          users: ['bob'],
-          data: {
-            type: 'message',
-            messageType: 'private',
-            from: 'alice',
-            to: 'bob',
-            content: 'Hi Bob, how are you?'
-          }
-        })
+      await sendNotifyRequest({
+        appId,
+        users: ['bob'],
+        data: {
+          type: 'message',
+          messageType: 'private',
+          from: 'alice',
+          to: 'bob',
+          content: 'Hi Bob, how are you?'
+        }
+      })
 
       // 验证只有Bob收到私聊消息
       const [privateMessage] = await privateMessagePromise
@@ -313,17 +328,14 @@ describe('综合业务场景测试', () => {
       })
 
       // 发送HTTP请求并检查响应
-      const response1 = await request
-        .post('/notify')
-        .send({
-          appId: app1Id,
-          eventTopics: [commonTopic],
-          data: {
-            message: 'This is for app1 only',
-            appId: app1Id
-          }
-        })
-        .expect(200) // 确保HTTP请求成功
+      const response1 = await sendNotifyRequest({
+        appId: app1Id,
+        eventTopics: [commonTopic],
+        data: {
+          message: 'This is for app1 only',
+          appId: app1Id
+        }
+      })
 
       expect(response1.body.message).toBe('Notification sent successfully')
 
@@ -339,17 +351,14 @@ describe('综合业务场景测试', () => {
       // 向app2发送消息
       const app2MessagePromise = waitForEvent(app2Client, 'dataUpdate')
 
-      const response2 = await request
-        .post('/notify')
-        .send({
-          appId: app2Id,
-          eventTopics: [commonTopic],
-          data: {
-            message: 'This is for app2 only',
-            appId: app2Id
-          }
-        })
-        .expect(200) // 确保HTTP请求成功
+      const response2 = await sendNotifyRequest({
+        appId: app2Id,
+        eventTopics: [commonTopic],
+        data: {
+          message: 'This is for app2 only',
+          appId: app2Id
+        }
+      })
 
       expect(response2.body.message).toBe('Notification sent successfully')
 
@@ -386,18 +395,16 @@ describe('综合业务场景测试', () => {
       // 发送广播消息
       const startTime = Date.now()
       
-      await request
-        .post('/notify')
-        .send({
-          appId,
-          eventTopics: [topic],
-          data: {
-            type: 'broadcast',
-            title: 'Breaking News',
-            content: 'Important update for all users',
-            timestamp: startTime
-          }
-        })
+      await sendNotifyRequest({
+        appId,
+        eventTopics: [topic],
+        data: {
+          type: 'broadcast',
+          title: 'Breaking News',
+          content: 'Important update for all users',
+          timestamp: startTime
+        }
+      })
 
       // 等待所有客户端收到消息
       const receivedMessages = await Promise.all(messagePromises)
@@ -439,17 +446,15 @@ describe('综合业务场景测试', () => {
       const iosDeviceClient = deviceClients.find(d => d.deviceId === 'mobile-ios-001').client
       const messagePromise = waitForEvent(iosDeviceClient, 'dataUpdate')
 
-      await request
-        .post('/notify')
-        .send({
-          appId,
-          devices: ['mobile-ios-001'],
-          data: {
-            type: 'push',
-            title: 'iOS specific notification',
-            badge: 1
-          }
-        })
+      await sendNotifyRequest({
+        appId,
+        devices: ['mobile-ios-001'],
+        data: {
+          type: 'push',
+          title: 'iOS specific notification',
+          badge: 1
+        }
+      })
 
       const [deviceMessage] = await messagePromise
       expect(deviceMessage.type).toBe('push')
@@ -461,17 +466,15 @@ describe('综合业务场景测试', () => {
         waitForEvent(client, 'dataUpdate')
       )
 
-      await request
-        .post('/notify')
-        .send({
-          appId,
-          users: [userId],
-          data: {
-            type: 'sync',
-            action: 'profile_updated',
-            data: { name: 'John Doe', email: 'john@example.com' }
-          }
-        })
+      await sendNotifyRequest({
+        appId,
+        users: [userId],
+        data: {
+          type: 'sync',
+          action: 'profile_updated',
+          data: { name: 'John Doe', email: 'john@example.com' }
+        }
+      })
 
       const allMessages = await Promise.all(allDevicePromises)
       allMessages.forEach(([message]) => {
