@@ -301,7 +301,7 @@ describe('综合业务场景测试', () => {
       app1Client.emit('subscribe', [commonTopic])
       app2Client.emit('subscribe', [commonTopic])
 
-      await delay(100)
+      await delay(200) // 增加等待时间确保订阅完成
 
       // 向app1发送消息
       const app1MessagePromise = waitForEvent(app1Client, 'dataUpdate')
@@ -312,7 +312,8 @@ describe('综合业务场景测试', () => {
         app2ReceivedMessage = true
       })
 
-      await request
+      // 发送HTTP请求并检查响应
+      const response1 = await request
         .post('/notify')
         .send({
           appId: app1Id,
@@ -322,6 +323,9 @@ describe('综合业务场景测试', () => {
             appId: app1Id
           }
         })
+        .expect(200) // 确保HTTP请求成功
+
+      expect(response1.body.message).toBe('Notification sent successfully')
 
       // 验证只有app1客户端收到消息
       const [app1Message] = await app1MessagePromise
@@ -329,13 +333,13 @@ describe('综合业务场景测试', () => {
       expect(app1Message.appId).toBe(app1Id)
 
       // 等待一段时间确保app2没有收到消息
-      await delay(200)
+      await delay(300)
       expect(app2ReceivedMessage).toBe(false)
 
       // 向app2发送消息
       const app2MessagePromise = waitForEvent(app2Client, 'dataUpdate')
 
-      await request
+      const response2 = await request
         .post('/notify')
         .send({
           appId: app2Id,
@@ -345,6 +349,9 @@ describe('综合业务场景测试', () => {
             appId: app2Id
           }
         })
+        .expect(200) // 确保HTTP请求成功
+
+      expect(response2.body.message).toBe('Notification sent successfully')
 
       // 验证只有app2客户端收到消息
       const [app2Message] = await app2MessagePromise

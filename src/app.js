@@ -39,15 +39,24 @@ const logger = createLogger({
   ],
 });
 
-const redisClient = new Redis();
-redisClient.on("error", (err) => {
-  console.error("Redis client error:", err);
-});
+// 根据环境决定是否使用Redis
+let redisClient = null;
+let ioConfig = { ...opts };
 
-const io = new Server({
-  ...opts,
-  adapter: createAdapter(redisClient),
-});
+// 只有在非测试环境中才使用Redis
+if (process.env.NODE_ENV !== 'test') {
+  try {
+    redisClient = new Redis();
+    redisClient.on("error", (err) => {
+      console.error("Redis client error:", err);
+    });
+    ioConfig.adapter = createAdapter(redisClient);
+  } catch (error) {
+    console.warn("Redis不可用，使用默认内存适配器:", error.message);
+  }
+}
+
+const io = new Server(ioConfig);
 
 instrument(io, {
   auth: false,
@@ -210,13 +219,15 @@ router.post("/notify", async (ctx) => {
   }
 });
 
-// 启动服务器const PORT = 3000;
-// 使用路由
-app.use(router.routes()).use(router.allowedMethods());
-
 // 启动服务器
 const PORT = process.env.PORT || 3000;
 
-server.listen(PORT, () => {
-  logger.info(`Server is running on port ${PORT}`);
-});
+// 只有在非测试环境下才自动启动服务器
+if (process.env.NODE_ENV !== 'test') {
+  server.listen(PORT, () => {
+    logger.info(`Server is running on port ${PORT}`);
+  });
+}
+
+// 导出测试需要的组件
+export { server, io, app, logger, redisClient };
