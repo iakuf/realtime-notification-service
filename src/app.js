@@ -107,7 +107,7 @@ io.of(/\/(.+)/).on("connection", (socket, request) => {
   socket.on("subscribeCount", (eventTopics) => {
     eventTopics.forEach((topic) => {
       socket.join(`${topic}:count`);
-      logger.info(`${socket.io} 名字空间 ${appId} 订阅了 ${topic} 的在线数量`);
+      logger.info(`${socket.id} 名字空间 ${appId} 订阅了 ${topic} 的在线数量`);
     });
   });
 
@@ -121,7 +121,7 @@ io.of(/\/(.+)/).on("connection", (socket, request) => {
           var topicRoom = namespace.adapter.rooms.get(room);
           // 发送房间内用户数量更新的通知给所有订阅了room:count的客户端
           logger.debug(
-            `发送断开的信息给这个客户端所在的所有房间，这个房间 ${room} 有 ${topicRoom.szie} 个客户端.`
+            `发送断开的信息给这个客户端所在的所有房间，这个房间 ${room} 有 ${topicRoom?.size || 0} 个客户端.`
           );
           if (topicRoom && topicRoom.size > 1) {
             namespace.in(`${room}:count`).emit("dataUpdate", {
@@ -131,7 +131,7 @@ io.of(/\/(.+)/).on("connection", (socket, request) => {
             });
           }
         }
-        logger.debug(`${socket.io} 用户离开了名字空间: ${appId} 和 room: ${room}`);
+        logger.debug(`${socket.id} 用户离开了名字空间: ${appId} 和 room: ${room}`);
       }
     });
   });

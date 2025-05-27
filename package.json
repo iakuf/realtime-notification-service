@@ -5,7 +5,10 @@
   "author": "fukai <iakuf@163.com>",
   "type": "module",
   "scripts": {
-    "test": "npx mocha --require esm --recursive tests/"
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:watch": "vitest --watch",
+    "test:ui": "vitest --ui"
   },
   "dependencies": {
     "@sinonjs/fake-timers": "^13.0.2",
@@ -25,6 +28,10 @@
     "yarn": "^1.22.22"
   },
   "devDependencies": {
-    "esm": "^3.2.25"
+    "@vitest/ui": "^3.1.4",
+    "esm": "^3.2.25",
+    "socket.io-client": "^4.8.1",
+    "supertest": "^7.1.1",
+    "vitest": "^3.1.4"
   }
 }
